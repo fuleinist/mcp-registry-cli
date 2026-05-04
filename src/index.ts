@@ -1,0 +1,193 @@
+#!/usr/bin/env node
+import { Command } from 'commander';
+import { searchServers, getServerByName, getServersPage, MOCK_SERVERS } from './registry';
+import { getInstalledServers, isInstalled, installServer, uninstallServer, updateServer } from './storage';
+import chalk from 'chalk';
+import ora from 'ora';
+
+const program = new Command();
+
+program
+  .name('mcpr')
+  .description('CLI to discover, install, and manage MCP servers from a community registry')
+  .version('1.0.0');
+
+program
+  .command('search <query>')
+  .description('Search for MCP servers in the registry')
+  .action((query) => {
+    const spinner = ora('Searching registry...').start();
+    const results = searchServers(query);
+    spinner.stop();
+
+    if (results.length === 0) {
+      console.log(chalk.yellow(`No servers found matching "${query}"`));
+      return;
+    }
+
+    console.log(chalk.bold(`\nFound ${results.length} server(s):\n`));
+    results.forEach(server => {
+      console.log(chalk.cyan(`  ${server.displayName} (${server.name})`));
+      console.log(`    ${server.description}`);
+      console.log(`    ${chalk.gray('installs:')} ${server.installCount.toLocaleString()}  ${chalk.gray('version:')} ${server.version}`);
+      console.log();
+    });
+  });
+
+program
+  .command('list')
+  .description('List all available MCP servers (paginated)')
+  .option('-p, --page <number>', 'Page number', '1')
+  .option('-l, --limit <number>', 'Results per page', '10')
+  .action((options) => {
+    const page = parseInt(options.page, 10);
+    const limit = parseInt(options.limit, 10);
+    const spinner = ora('Fetching server list...').start();
+    const { servers, total } = getServersPage(page, limit);
+    spinner.stop();
+
+    console.log(chalk.bold(`\nMCP Server Registry (${total} total)\n`));
+    servers.forEach(server => {
+      console.log(chalk.cyan(`  ${server.displayName} (${server.name})`));
+      console.log(`    ${server.description}`);
+      console.log(`    ${chalk.gray('installs:')} ${server.installCount.toLocaleString()}  ${chalk.gray('version:')} ${server.version}`);
+      console.log();
+    });
+
+    const totalPages = Math.ceil(total / limit);
+    if (totalPages > 1) {
+      console.log(chalk.gray(`Page ${page} of ${totalPages}. Use --page to navigate.`));
+    }
+  });
+
+program
+  .command('info <name>')
+  .description('Show detailed information about an MCP server')
+  .action((name) => {
+    const server = getServerByName(name);
+    if (!server) {
+      console.log(chalk.red(`Server "${name}" not found in registry.`));
+      process.exit(1);
+    }
+
+    const installed = isInstalled(server.name);
+    console.log(chalk.bold(`\n${server.displayName}\n`));
+    console.log(chalk.cyan(`  Name:`), server.name);
+    console.log(chalk.cyan(`  Author:`), server.author);
+    console.log(chalk.cyan(`  Version:`), server.version);
+    console.log(chalk.cyan(`  Description:`), server.description);
+    console.log(chalk.cyan(`  Install Count:`), server.installCount.toLocaleString());
+    console.log(chalk.cyan(`  Categories:`), server.categories.join(', '));
+    console.log(chalk.cyan(`  Tools:`), server.tools.join(', '));
+    if (server.envVars.length > 0) {
+      console.log(chalk.yellow(`  Required Env Vars:`), server.envVars.join(', '));
+    }
+    console.log(chalk.cyan(`  Repository:`), server.repository);
+    console.log(chalk.cyan(`  Status:`), installed ? chalk.green('Installed') : chalk.gray('Not installed'));
+    console.log();
+  });
+
+program
+  .command('install <name>')
+  .description('Install an MCP server to ~/.mcpr/servers/')
+  .option('-v, --version <version>', 'Specific version to install')
+  .action((name, options) => {
+    const server = getServerByName(name);
+    if (!server) {
+      console.log(chalk.red(`Server "${name}" not found in registry.`));
+      process.exit(1);
+    }
+
+    if (isInstalled(name)) {
+      console.log(chalk.yellow(`Server "${name}" is already installed.`));
+      return;
+    }
+
+    const spinner = ora(`Installing ${server.displayName}...`).start();
+    try {
+      installServer(server.name, {
+        version: options.version || server.version,
+        repository: server.repository
+      });
+      spinner.succeed(chalk.green(`Installed ${server.displayName} to ~/.mcpr/servers/${name}/`));
+    } catch (err) {
+      spinner.fail(chalk.red(`Failed to install ${name}: ${err}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('installed')
+  .description('List all locally installed MCP servers')
+  .action(() => {
+    const installed = getInstalledServers();
+    
+    if (installed.length === 0) {
+      console.log(chalk.yellow('\nNo MCP servers installed yet.\n'));
+      console.log(`Run ${chalk.cyan('mcpr install <name>')} to install a server.`);
+      console.log();
+      return;
+    }
+
+    console.log(chalk.bold(`\nInstalled MCP Servers (${installed.length})\n`));
+    installed.forEach(server => {
+      console.log(chalk.cyan(`  ${server.name}`));
+      console.log(`    Version: ${server.version}`);
+      console.log(`    Path: ${server.installPath}`);
+      console.log(`    Installed: ${server.installedAt}`);
+      console.log();
+    });
+  });
+
+program
+  .command('uninstall <name>')
+  .description('Uninstall a locally installed MCP server')
+  .action((name) => {
+    if (!isInstalled(name)) {
+      console.log(chalk.red(`Server "${name}" is not installed.`));
+      process.exit(1);
+    }
+
+    const spinner = ora(`Uninstalling ${name}...`).start();
+    try {
+      uninstallServer(name);
+      spinner.succeed(chalk.green(`Uninstalled ${name}`));
+    } catch (err) {
+      spinner.fail(chalk.red(`Failed to uninstall ${name}: ${err}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('update [name]')
+  .description('Update an installed MCP server (or all if no name given)')
+  .action((name) => {
+    const installed = getInstalledServers();
+    
+    if (installed.length === 0) {
+      console.log(chalk.yellow('\nNo MCP servers installed to update.\n'));
+      return;
+    }
+
+    if (name) {
+      const server = installed.find(s => s.name === name);
+      if (!server) {
+        console.log(chalk.red(`Server "${name}" is not installed.`));
+        process.exit(1);
+      }
+      
+      const spinner = ora(`Updating ${name}...`).start();
+      // Mock update: just bump version
+      updateServer(name, '1.1.0');
+      spinner.succeed(chalk.green(`Updated ${name} to 1.1.0`));
+    } else {
+      console.log(chalk.bold('\nUpdating all installed servers...\n'));
+      for (const server of installed) {
+        const spinner = ora(`Updating ${server.name}...`).start();
+        updateServer(server.name, '1.1.0');
+        spinner.succeed(chalk.green(`Updated ${server.name}`));
+      }
+    }
+  });
+
+program.parse();
