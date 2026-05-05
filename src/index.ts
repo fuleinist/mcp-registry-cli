@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { Command } from 'commander';
 import { searchServers, getServerByName, getServersPage, MOCK_SERVERS } from './registry';
 import { getInstalledServers, isInstalled, installServer, uninstallServer, updateServer } from './storage';
@@ -39,12 +42,18 @@ program
   .description('List all available MCP servers (paginated)')
   .option('-p, --page <number>', 'Page number', '1')
   .option('-l, --limit <number>', 'Results per page', '10')
+  .option('-j, --json', 'Output as JSON')
   .action((options) => {
     const page = parseInt(options.page, 10);
     const limit = parseInt(options.limit, 10);
     const spinner = ora('Fetching server list...').start();
     const { servers, total } = getServersPage(page, limit);
     spinner.stop();
+
+    if (options.json) {
+      console.log(JSON.stringify({ servers, total, page, limit }, null, 2));
+      return;
+    }
 
     console.log(chalk.bold(`\nMCP Server Registry (${total} total)\n`));
     servers.forEach(server => {
@@ -119,8 +128,14 @@ program
 program
   .command('installed')
   .description('List all locally installed MCP servers')
-  .action(() => {
+  .option('-j, --json', 'Output as JSON')
+  .action((options) => {
     const installed = getInstalledServers();
+    
+    if (options.json) {
+      console.log(JSON.stringify(installed, null, 2));
+      return;
+    }
     
     if (installed.length === 0) {
       console.log(chalk.yellow('\nNo MCP servers installed yet.\n'));
@@ -187,6 +202,19 @@ program
         updateServer(server.name, '1.1.0');
         spinner.succeed(chalk.green(`Updated ${server.name}`));
       }
+    }
+  });
+
+program
+  .command('refresh')
+  .description('Clear local registry cache (forces re-fetch on next list/search)')
+  .action(() => {
+    const cachePath = path.join(os.homedir(), '.mcpr', 'cache.json');
+    if (fs.existsSync(cachePath)) {
+      fs.unlinkSync(cachePath);
+      console.log(chalk.green('Registry cache cleared.'));
+    } else {
+      console.log(chalk.gray('No cache to clear.'));
     }
   });
 
