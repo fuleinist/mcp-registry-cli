@@ -218,4 +218,27 @@ program
     }
   });
 
+program
+  .command('status')
+  .description('Show CLI version, registry URL, cache status, and installed server count')
+  .action(() => {
+    const config = { registryUrl: process.env.MCPR_REGISTRY_URL || 'https://registry.modelcontextprotocol.dev' };
+    const cachePath = path.join(os.homedir(), '.mcpr', 'cache.json');
+    const installed = getInstalledServers();
+    const cacheAge = fs.existsSync(cachePath)
+      ? Math.round((Date.now() - fs.statSync(cachePath).mtimeMs) / 60000)
+      : null;
+
+    console.log(chalk.bold('\nMCP Registry CLI — Status\n'));
+    console.log(chalk.cyan('  Version:'), '1.0.0');
+    console.log(chalk.cyan('  Registry:'), config.registryUrl);
+    console.log(chalk.cyan('  Cache:'), cacheAge !== null
+      ? `cached (${cacheAge}m ago)`
+      : chalk.gray('not cached'));
+    console.log(chalk.cyan('  Installed:'), installed.length > 0
+      ? `${installed.length} server(s)`
+      : chalk.gray('none'));
+    console.log();
+  });
+
 program.parse();
