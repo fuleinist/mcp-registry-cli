@@ -190,17 +190,19 @@ program
         console.log(chalk.red(`Server "${name}" is not installed.`));
         process.exit(1);
       }
-      
+      const registryServer = getServerByName(name);
+      const newVersion = registryServer ? registryServer.version : server.version;
       const spinner = ora(`Updating ${name}...`).start();
-      // Mock update: just bump version
-      updateServer(name, '1.1.0');
-      spinner.succeed(chalk.green(`Updated ${name} to 1.1.0`));
+      updateServer(name, newVersion);
+      spinner.succeed(chalk.green(`Updated ${name} to ${newVersion}`));
     } else {
       console.log(chalk.bold('\nUpdating all installed servers...\n'));
       for (const server of installed) {
+        const registryServer = getServerByName(server.name);
+        const newVersion = registryServer ? registryServer.version : server.version;
         const spinner = ora(`Updating ${server.name}...`).start();
-        updateServer(server.name, '1.1.0');
-        spinner.succeed(chalk.green(`Updated ${server.name}`));
+        updateServer(server.name, newVersion);
+        spinner.succeed(chalk.green(`Updated ${server.name} to ${newVersion}`));
       }
     }
   });
