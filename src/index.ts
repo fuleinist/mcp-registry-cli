@@ -18,10 +18,16 @@ program
 program
   .command('search <query>')
   .description('Search for MCP servers in the registry')
-  .action((query) => {
+  .option('-j, --json', 'Output as JSON')
+  .action((query, options) => {
     const spinner = ora('Searching registry...').start();
     const results = searchServers(query);
     spinner.stop();
+
+    if (options.json) {
+      console.log(JSON.stringify({ query, count: results.length, results }, null, 2));
+      return;
+    }
 
     if (results.length === 0) {
       console.log(chalk.yellow(`No servers found matching "${query}"`));
