@@ -78,7 +78,8 @@ program
 program
   .command('info <name>')
   .description('Show detailed information about an MCP server')
-  .action((name) => {
+  .option('-j, --json', 'Output as JSON')
+  .action((name, options) => {
     const server = getServerByName(name);
     if (!server) {
       console.log(chalk.red(`Server "${name}" not found in registry.`));
@@ -86,6 +87,12 @@ program
     }
 
     const installed = isInstalled(server.name);
+
+    if (options.json) {
+      console.log(JSON.stringify({ ...server, installed }, null, 2));
+      return;
+    }
+
     console.log(chalk.bold(`\n${server.displayName}\n`));
     console.log(chalk.cyan(`  Name:`), server.name);
     console.log(chalk.cyan(`  Author:`), server.author);
