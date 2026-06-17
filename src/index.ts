@@ -236,13 +236,27 @@ program
 program
   .command('status')
   .description('Show CLI version, registry URL, cache status, and installed server count')
-  .action(() => {
+  .option('-j, --json', 'Output as JSON')
+  .action((options) => {
     const config = { registryUrl: process.env.MCPR_REGISTRY_URL || 'https://registry.modelcontextprotocol.dev' };
     const cachePath = path.join(os.homedir(), '.mcpr', 'cache.json');
     const installed = getInstalledServers();
     const cacheAge = fs.existsSync(cachePath)
       ? Math.round((Date.now() - fs.statSync(cachePath).mtimeMs) / 60000)
       : null;
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        version: '1.0.0',
+        registryUrl: config.registryUrl,
+        cache: {
+          exists: cacheAge !== null,
+          ageMinutes: cacheAge,
+        },
+        installedCount: installed.length,
+      }, null, 2));
+      return;
+    }
 
     console.log(chalk.bold('\nMCP Registry CLI — Status\n'));
     console.log(chalk.cyan('  Version:'), '1.0.0');
