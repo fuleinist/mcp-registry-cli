@@ -113,6 +113,7 @@ program
   .command('install <name>')
   .description('Install an MCP server to ~/.mcpr/servers/')
   .option('-v, --version <version>', 'Specific version to install')
+  .option('-j, --json', 'Output as JSON')
   .action((name, options) => {
     const server = getServerByName(name);
     if (!server) {
@@ -121,14 +122,39 @@ program
     }
 
     if (isInstalled(name)) {
+      if (options.json) {
+        const existing = getInstalledServers().find(s => s.name === name);
+        console.log(JSON.stringify({ ...existing, alreadyInstalled: true }, null, 2));
+        return;
+      }
       console.log(chalk.yellow(`Server "${name}" is already installed.`));
+      return;
+    }
+
+    const installedVersion = options.version || server.version;
+
+    if (options.json) {
+      try {
+        installServer(server.name, { version: installedVersion, repository: server.repository });
+      } catch (err) {
+        console.log(chalk.red(`Failed to install ${name}: ${err}`));
+        process.exit(1);
+      }
+      console.log(JSON.stringify({
+        name: server.name,
+        displayName: server.displayName,
+        version: installedVersion,
+        repository: server.repository,
+        installPath: path.join(os.homedir(), '.mcpr', 'servers', server.name),
+        installedAt: new Date().toISOString(),
+      }, null, 2));
       return;
     }
 
     const spinner = ora(`Installing ${server.displayName}...`).start();
     try {
       installServer(server.name, {
-        version: options.version || server.version,
+        version: installedVersion,
         repository: server.repository
       });
       spinner.succeed(chalk.green(`Installed ${server.displayName} to ~/.mcpr/servers/${name}/`));
