@@ -32,7 +32,7 @@ mcpr --help
 mcpr search <query>           # search registry
 mcpr list [--page N] [--limit N]  # browse with pagination
 mcpr info <name>              # show server details
-mcpr install <name> [--version <v>]  # install to ~/.mcpr/servers/
+mcpr install <name> [--target-version <v>]  # install to ~/.mcpr/servers/
 mcpr installed                # list installed servers
 mcpr uninstall <name>         # remove installed server
 mcpr update [name]            # update installed server(s)

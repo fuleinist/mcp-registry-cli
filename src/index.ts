@@ -112,7 +112,7 @@ program
 program
   .command('install <name>')
   .description('Install an MCP server to ~/.mcpr/servers/')
-  .option('-v, --version <version>', 'Specific version to install')
+  .option('-v, --target-version <version>', 'Specific version to install')
   .option('-j, --json', 'Output as JSON')
   .action((name, options) => {
     const server = getServerByName(name);
@@ -131,7 +131,7 @@ program
       return;
     }
 
-    const installedVersion = options.version || server.version;
+    const installedVersion = options.targetVersion || server.version;
 
     if (options.json) {
       try {
