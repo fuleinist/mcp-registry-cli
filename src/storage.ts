@@ -84,16 +84,37 @@ export function getInstalledServers(): InstalledServerInfo[] {
   return installed.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Resolve a server name to an absolute directory under serversDir, refusing
+ * any name that would escape it. Returns null if the name is unsafe.
+ *
+ * Unsafe names contain path separators, null bytes, or `..` segments, or
+ * resolve to a path outside serversDir.
+ */
+function safeServerPath(name: string, serversDir: string = getServersDir()): string | null {
+  if (typeof name !== 'string' || name.length === 0) return null;
+  if (name.includes('/') || name.includes('\\') || name.includes('\0')) return null;
+  if (name === '.' || name === '..' || name.split(/[\\/]/).includes('..')) return null;
+
+  const resolved = path.resolve(serversDir, name);
+  const root = path.resolve(serversDir) + path.sep;
+  if (!(resolved + path.sep).startsWith(root)) return null;
+  return resolved;
+}
+
 export function isInstalled(name: string): boolean {
-  const serversDir = getServersDir();
-  return fs.existsSync(path.join(serversDir, name));
+  const dir = safeServerPath(name);
+  return dir !== null && fs.existsSync(dir);
 }
 
 export function installServer(name: string, serverData: { version: string, repository: string }): void {
   const serversDir = getServersDir();
   ensureDir(serversDir);
-  
-  const serverDir = path.join(serversDir, name);
+
+  const serverDir = safeServerPath(name, serversDir);
+  if (serverDir === null) {
+    throw new Error(`Invalid server name: "${name}"`);
+  }
   ensureDir(serverDir);
   
   // Create manifest
@@ -117,15 +138,16 @@ export function installServer(name: string, serverData: { version: string, repos
 }
 
 export function uninstallServer(name: string): void {
-  const serverDir = path.join(getServersDir(), name);
-  if (fs.existsSync(serverDir)) {
+  const serverDir = safeServerPath(name);
+  if (serverDir !== null && fs.existsSync(serverDir)) {
     fs.rmSync(serverDir, { recursive: true, force: true });
   }
 }
 
 export function updateServer(name: string, newVersion: string): void {
-  const manifestPath = path.join(getServersDir(), name, 'manifest.json');
-  if (fs.existsSync(manifestPath)) {
+  const serverDir = safeServerPath(name);
+  const manifestPath = serverDir !== null ? path.join(serverDir, 'manifest.json') : null;
+  if (manifestPath !== null && fs.existsSync(manifestPath)) {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
     manifest.version = newVersion;
     manifest.updatedAt = new Date().toISOString();
