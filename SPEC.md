@@ -18,9 +18,10 @@ A sleek CLI tool that lets developers discover, browse, install, and manage MCP 
 
 - **Runtime:** Node.js 20+, TypeScript
 - **CLI Framework:** Commander.js
-- **Registry API:** JSON-based registry (mock at first with real API structure)
+- **Registry API:** Fetches from the official MCP Registry at `https://registry.modelcontextprotocol.io/v0/servers`
 - **Install destination:** `~/.mcpr/servers/<server-name>/`
-- **Registry URL:** configurable via `MCPR_REGISTRY_URL` env var; default to community registry
+- **Registry URL:** configurable via `MCPR_REGISTRY_URL` env var; default to official registry
+- **Caching:** Results cached to `~/.mcpr/cache.json`; falls back to cache on network error, then to built-in mock data
 - **No external runtime deps** — the CLI itself installs as an npm package
 
 ## 4. Command Interface
@@ -74,6 +75,8 @@ mcpr update [name]            # update installed server(s)
 9. `mcpr --help` shows all commands with descriptions
 10. Full test suite with unit tests for core logic
 
-## 7. Scope for Day 1 MVP
+## 7. Scope
 
-Build the CLI with hardcoded mock registry data (3-5 servers). Wire up all commands. Make it installable. Tests pass. Then add real API integration in a follow-up.
+- Real API integration with the official MCP Registry at `registry.modelcontextprotocol.io`
+- Local caching with automatic fallback to cache/mock data when offline
+- `mcpr refresh` clears cache and forces re-fetch on next command

@@ -52,8 +52,9 @@ mcpr uninstall github
 
 ## Configuration
 
-- Registry URL: defaults to `https://registry.modelcontextprotocol.dev`
+- Registry URL: defaults to `https://registry.modelcontextprotocol.io/v0/servers`
 - Override with `MCPR_REGISTRY_URL` environment variable
+- Results are cached locally in `~/.mcpr/cache.json`; use `mcpr refresh` to clear cache
 
 ## License
 

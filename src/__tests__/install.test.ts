@@ -9,6 +9,7 @@ const INSTALLED_DIR = path.join(os.homedir(), '.mcpr', 'servers', 'github');
 function runCli(args: string): string {
   return execSync(`npx ts-node ${CLI} ${args}`, {
     encoding: 'utf-8',
+    env: { ...process.env, MCPR_REGISTRY_URL: 'http://localhost:1' },
   });
 }
 

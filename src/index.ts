@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Command } from 'commander';
-import { searchServers, getServerByName, getServersPage, MOCK_SERVERS } from './registry';
+import { searchServers, getServerByName, getServersPage, MOCK_SERVERS, fetchRegistryServers } from './registry';
 import { getInstalledServers, isInstalled, installServer, uninstallServer, updateServer } from './storage';
 import chalk from 'chalk';
 import ora from 'ora';
@@ -114,8 +114,9 @@ program
   .description('Install an MCP server to ~/.mcpr/servers/')
   .option('-v, --target-version <version>', 'Specific version to install')
   .option('-j, --json', 'Output as JSON')
-  .action((name, options) => {
-    const server = getServerByName(name);
+  .action(async (name, options) => {
+    const servers = await fetchRegistryServers();
+    const server = getServerByName(name, servers);
     if (!server) {
       console.log(chalk.red(`Server "${name}" not found in registry.`));
       process.exit(1);
@@ -215,7 +216,7 @@ program
 program
   .command('update [name]')
   .description('Update an installed MCP server (or all if no name given)')
-  .action((name) => {
+  .action(async (name) => {
     const installed = getInstalledServers();
     
     if (installed.length === 0) {
@@ -223,13 +224,15 @@ program
       return;
     }
 
+    const servers = await fetchRegistryServers();
+
     if (name) {
       const server = installed.find(s => s.name === name);
       if (!server) {
         console.log(chalk.red(`Server "${name}" is not installed.`));
         process.exit(1);
       }
-      const registryServer = getServerByName(name);
+      const registryServer = getServerByName(name, servers);
       const newVersion = registryServer ? registryServer.version : server.version;
       const spinner = ora(`Updating ${name}...`).start();
       updateServer(name, newVersion);
@@ -237,7 +240,7 @@ program
     } else {
       console.log(chalk.bold('\nUpdating all installed servers...\n'));
       for (const server of installed) {
-        const registryServer = getServerByName(server.name);
+        const registryServer = getServerByName(server.name, servers);
         const newVersion = registryServer ? registryServer.version : server.version;
         const spinner = ora(`Updating ${server.name}...`).start();
         updateServer(server.name, newVersion);
@@ -249,14 +252,10 @@ program
 program
   .command('refresh')
   .description('Clear local registry cache (forces re-fetch on next list/search)')
-  .action(() => {
-    const cachePath = path.join(os.homedir(), '.mcpr', 'cache.json');
-    if (fs.existsSync(cachePath)) {
-      fs.unlinkSync(cachePath);
-      console.log(chalk.green('Registry cache cleared.'));
-    } else {
-      console.log(chalk.gray('No cache to clear.'));
-    }
+  .action(async () => {
+    const { clearCache } = await import('./storage');
+    clearCache();
+    console.log(chalk.green('Registry cache cleared.'));
   });
 
 program
@@ -264,7 +263,7 @@ program
   .description('Show CLI version, registry URL, cache status, and installed server count')
   .option('-j, --json', 'Output as JSON')
   .action((options) => {
-    const config = { registryUrl: process.env.MCPR_REGISTRY_URL || 'https://registry.modelcontextprotocol.dev' };
+    const config = { registryUrl: process.env.MCPR_REGISTRY_URL || 'https://registry.modelcontextprotocol.io/v0/servers' };
     const cachePath = path.join(os.homedir(), '.mcpr', 'cache.json');
     const installed = getInstalledServers();
     const cacheAge = fs.existsSync(cachePath)
