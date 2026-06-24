@@ -7,7 +7,7 @@ export interface Config {
 }
 
 const DEFAULT_CONFIG: Config = {
-  registryUrl: process.env.MCPR_REGISTRY_URL || 'https://registry.modelcontextprotocol.dev'
+  registryUrl: process.env.MCPR_REGISTRY_URL || 'https://registry.modelcontextprotocol.io/v0/servers'
 };
 
 function getMcprDir(): string {
@@ -21,6 +21,32 @@ function getServersDir(): string {
 function ensureDir(dirPath: string): void {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+export function getCachePath(): string {
+  return path.join(getMcprDir(), 'cache.json');
+}
+
+export function getCachedServers<T>(): T | null {
+  const cachePath = getCachePath();
+  if (!fs.existsSync(cachePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedServers<T>(data: T): void {
+  ensureDir(getMcprDir());
+  fs.writeFileSync(getCachePath(), JSON.stringify(data, null, 2));
+}
+
+export function clearCache(): void {
+  const cachePath = getCachePath();
+  if (fs.existsSync(cachePath)) {
+    fs.unlinkSync(cachePath);
   }
 }
 

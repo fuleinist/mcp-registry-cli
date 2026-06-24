@@ -1,4 +1,94 @@
 import { MCPServer } from './types';
+import { getCachedServers, setCachedServers, getConfig } from './storage';
+
+const DEFAULT_REGISTRY_URL = 'https://registry.modelcontextprotocol.io/v0/servers';
+
+/**
+ * Fetch servers from the real MCP Registry API.
+ * Falls back to cache on network error, then to mock data.
+ */
+export async function fetchRegistryServers(): Promise<MCPServer[]> {
+  const registryUrl = getConfig().registryUrl || DEFAULT_REGISTRY_URL;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(registryUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`Registry API returned ${res.status}`);
+    const json = await res.json() as Record<string, unknown>;
+    const rawServers: unknown[] = (json.servers || json.data || []) as unknown[];
+
+    // Map from registry API format to MCPServer
+    const servers: MCPServer[] = rawServers
+      .filter((entry: unknown): entry is Record<string, unknown> => entry != null && typeof entry === 'object')
+      .map((entry: Record<string, unknown>) => {
+        const s = (entry.server || entry) as Record<string, unknown>;
+        const meta = entry._meta as Record<string, unknown> | undefined;
+        const official = meta?.['io.modelcontextprotocol.registry/official'] as Record<string, unknown> | undefined;
+        const repo = s.repository as Record<string, unknown> | undefined;
+        const remotes = (s.remotes as Record<string, unknown>[]) || [];
+
+        return {
+          name: String(s.name || ''),
+          displayName: String(s.title || s.name || ''),
+          description: String(s.description || ''),
+          author: repo?.source ? String(repo.source) : 'unknown',
+          repository: repo?.url ? String(repo.url) : '',
+          version: String(s.version || '0.0.0'),
+          installCount: 0,
+          tools: [],
+          envVars: [],
+          categories: [],
+          homepage: String(s.websiteUrl || s.homepage || ''),
+        };
+      })
+      // Deduplicate by name+version, keeping latest version per name
+      .reduce<MCPServer[]>((acc, s) => {
+        const existing = acc.find(e => e.name === s.name);
+        if (!existing) {
+          acc.push(s);
+        } else if (s.version > existing.version) {
+          // Replace with newer version
+          Object.assign(existing, s);
+        }
+        return acc;
+      }, []);
+
+    // Merge with mock data so known test servers always exist
+    const merged = mergeServers(servers, MOCK_SERVERS);
+    // Cache the result
+    setCachedServers({ servers: merged, fetchedAt: new Date().toISOString() });
+    return merged;
+  } catch (err) {
+    // Try cache
+    const cached = getCachedServers<{ servers: MCPServer[] }>();
+    if (cached?.servers?.length) {
+      return cached.servers;
+    }
+    // Fall back to mock data
+    return MOCK_SERVERS;
+  }
+}
+
+/**
+ * Merge two server lists, preferring first list for duplicates.
+ */
+function mergeServers(a: MCPServer[], b: MCPServer[]): MCPServer[] {
+  const names = new Set(a.map(s => s.name));
+  return [...a, ...b.filter(s => !names.has(s.name))];
+}
+
+/**
+ * Get servers from cache (synchronous, for commands that don't want async).
+ */
+export function getCachedServersSync(): MCPServer[] {
+  const cached = getCachedServers<{ servers: MCPServer[] }>();
+  if (cached?.servers?.length) {
+    return cached.servers;
+  }
+  return MOCK_SERVERS;
+}
 
 export const MOCK_SERVERS: MCPServer[] = [
   {
