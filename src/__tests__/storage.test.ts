@@ -148,4 +148,34 @@ describe('storage path traversal', () => {
       expect(updated.version).toBe('2.0.0');
     });
   });
+
+  describe('parseRepoUrl', () => {
+    it('parses a simple owner/repo URL', () => {
+      const result = storage.parseRepoUrl('https://github.com/owner/repo');
+      expect(result).toEqual({ owner: 'owner', repo: 'repo', branch: 'HEAD', subdir: '' });
+    });
+
+    it('parses a URL with .git suffix', () => {
+      const result = storage.parseRepoUrl('https://github.com/owner/repo.git');
+      expect(result).toEqual({ owner: 'owner', repo: 'repo', branch: 'HEAD', subdir: '' });
+    });
+
+    it('parses a URL with branch and subdirectory', () => {
+      const result = storage.parseRepoUrl('https://github.com/owner/repo/tree/main/src/server');
+      expect(result).toEqual({ owner: 'owner', repo: 'repo', branch: 'main', subdir: 'src/server' });
+    });
+
+    it('parses a URL with branch but no subdirectory', () => {
+      const result = storage.parseRepoUrl('https://github.com/owner/repo/tree/develop');
+      expect(result).toEqual({ owner: 'owner', repo: 'repo', branch: 'develop', subdir: '' });
+    });
+
+    it('returns null for non-GitHub URLs', () => {
+      expect(storage.parseRepoUrl('https://gitlab.com/owner/repo')).toBeNull();
+    });
+
+    it('returns null for invalid URLs', () => {
+      expect(storage.parseRepoUrl('not-a-url')).toBeNull();
+    });
+  });
 });

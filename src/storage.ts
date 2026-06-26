@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { execSync } from 'child_process';
 
 export interface Config {
   registryUrl: string;
@@ -133,6 +134,100 @@ export function isInstalled(name: string): boolean {
   return dir !== null && fs.existsSync(dir);
 }
 
+/**
+ * Parse a GitHub repository URL into owner, repo, branch, and subdirectory.
+ * Handles:
+ *   - https://github.com/owner/repo
+ *   - https://github.com/owner/repo/tree/branch/path
+ *   - https://github.com/owner/repo.git
+ */
+export function parseRepoUrl(url: string): { owner: string; repo: string; branch: string; subdir: string } | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname !== 'github.com') return null;
+
+    const parts = u.pathname.replace(/\.git$/, '').split('/').filter(Boolean);
+    if (parts.length < 2) return null;
+
+    const owner = parts[0];
+    const repo = parts[1];
+    let branch = 'HEAD';
+    let subdir = '';
+
+    if (parts[2] === 'tree' && parts[3]) {
+      branch = parts[3];
+      subdir = parts.slice(4).join('/');
+    }
+
+    return { owner, repo, branch, subdir };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Download server source code from a GitHub repository URL.
+ * Clones with --depth 1. For monorepo URLs (containing /tree/),
+ * extracts only the relevant subdirectory.
+ *
+ * Fail-soft: if git is unavailable or the clone fails, the server
+ * directory still contains the manifest and README.
+ */
+export function downloadServerCode(serverDir: string, repository: string): void {
+  // Allow tests to skip network-heavy clone
+  if (process.env.MCPR_SKIP_DOWNLOAD) return;
+
+  const parsed = parseRepoUrl(repository);
+  if (!parsed) return;
+
+  const cloneUrl = `https://github.com/${parsed.owner}/${parsed.repo}.git`;
+  const cloneDir = path.join(os.tmpdir(), `mcpr-clone-${Date.now()}`);
+
+  try {
+    execSync(`git clone --depth 1 --branch ${parsed.branch} "${cloneUrl}" "${cloneDir}"`, {
+      stdio: 'pipe',
+      timeout: 60000,
+    });
+
+    const sourceDir = parsed.subdir ? path.join(cloneDir, parsed.subdir) : cloneDir;
+
+    if (fs.existsSync(sourceDir)) {
+      const entries = fs.readdirSync(sourceDir);
+      for (const entry of entries) {
+        if (entry === '.git') continue;
+        const src = path.join(sourceDir, entry);
+        const dst = path.join(serverDir, entry);
+        // Don't overwrite manifest.json or README.md
+        if (entry === 'manifest.json' || entry === 'README.md') continue;
+        if (fs.existsSync(dst)) {
+          fs.rmSync(dst, { recursive: true, force: true });
+        }
+        fs.renameSync(src, dst);
+      }
+    }
+
+    // Install production dependencies if package.json exists
+    const pkgPath = path.join(serverDir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        execSync('npm install --production --no-audit --no-fund', {
+          cwd: serverDir,
+          stdio: 'pipe',
+          timeout: 120000,
+        });
+      } catch {
+        // Non-fatal: user can run npm install manually
+      }
+    }
+  } catch {
+    // Non-fatal: server is registered even if code download fails
+  } finally {
+    if (fs.existsSync(cloneDir)) {
+      fs.rmSync(cloneDir, { recursive: true, force: true });
+    }
+  }
+}
+
 export function installServer(name: string, serverData: { version: string, repository: string }): void {
   const serversDir = getServersDir();
   ensureDir(serversDir);
@@ -161,6 +256,9 @@ export function installServer(name: string, serverData: { version: string, repos
     path.join(serverDir, 'README.md'),
     `# ${name}\n\nInstalled via mcp-registry-cli\n\nRepository: ${serverData.repository}\nVersion: ${serverData.version}\n`
   );
+
+  // Download server source code (best-effort, non-fatal)
+  downloadServerCode(serverDir, serverData.repository);
 }
 
 export function uninstallServer(name: string): void {
