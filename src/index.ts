@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Command } from 'commander';
-import { searchServers, getServerByName, getServersPage, MOCK_SERVERS, fetchRegistryServers } from './registry';
+import { searchServers, getServerByName, getServersPage, fetchRegistryServers } from './registry';
 import { getInstalledServers, isInstalled, installServer, uninstallServer, updateServer } from './storage';
 import chalk from 'chalk';
 import ora from 'ora';

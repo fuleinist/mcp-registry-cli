@@ -158,7 +158,7 @@ export const MOCK_SERVERS: MCPServer[] = [
   }
 ];
 
-export function searchServers(query: string, servers: MCPServer[] = MOCK_SERVERS): MCPServer[] {
+export function searchServers(query: string, servers: MCPServer[] = getCachedServersSync()): MCPServer[] {
   const q = query.toLowerCase();
   return servers.filter(s =>
     s.name.toLowerCase().includes(q) ||
@@ -168,11 +168,11 @@ export function searchServers(query: string, servers: MCPServer[] = MOCK_SERVERS
   );
 }
 
-export function getServerByName(name: string, servers: MCPServer[] = MOCK_SERVERS): MCPServer | undefined {
+export function getServerByName(name: string, servers: MCPServer[] = getCachedServersSync()): MCPServer | undefined {
   return servers.find(s => s.name.toLowerCase() === name.toLowerCase());
 }
 
-export function getServersPage(page: number, pageSize: number, servers: MCPServer[] = MOCK_SERVERS): { servers: MCPServer[], total: number } {
+export function getServersPage(page: number, pageSize: number, servers: MCPServer[] = getCachedServersSync()): { servers: MCPServer[], total: number } {
   const start = (page - 1) * pageSize;
   const end = start + pageSize;
   return {
